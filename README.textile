@@ -1,0 +1,2 @@
+This program has only just begun.  I hope to start making progress this week,
+as I read through "Real World Haskell".
