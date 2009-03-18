@@ -26,10 +26,15 @@ Executable hackports
     Main-Is:            Main.hs
     -- We want assertion checking on even if people build with -O
     -- although it is expensive, we want to catch problems early:
-    ghc-options:        -prof -auto-all -Wall -fno-ignore-asserts
+    ghc-options:        -Wall -fno-ignore-asserts -fvia-C
+    extensions:          ForeignFunctionInterface,
+                         CPP
+    includes:            openssl/md5.h openssl/sha.h openssl/ripemd.h
+    extra-libraries:     crypto
     if impl(ghc >= 6.8)
       ghc-options: -fwarn-tabs
     Other-Modules:
+        Digest
         Distribution.Client.BuildReports.Anonymous
         Distribution.Client.BuildReports.Storage
         Distribution.Client.BuildReports.Types

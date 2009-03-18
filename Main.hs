@@ -1,16 +1,25 @@
 module Main where
 
-import Data.List ( sortBy, groupBy, maximumBy )
+import Digest
+
+import Data.Char (intToDigit)
+import Data.List ( sortBy, groupBy, maximumBy, intercalate )
 import Data.Maybe ( listToMaybe, fromJust, fromMaybe, isJust )
 import Data.Monoid ( Monoid(mempty) )
 import Data.Version ( showVersion )
+import Data.ByteString.Char8 ( pack )
 
 import Control.Monad ( MonadPlus(mplus), join )
 import Control.Exception ( assert )
 
+import Network.HTTP
+import Network.URI
+
 --import System.Environment (getArgs)
 import qualified System.FilePath as FP
 import System.Directory
+import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
 
 import Distribution.Version   (Version)
 import Distribution.Verbosity (Verbosity, verbose)
@@ -187,6 +196,53 @@ allPackages verbosity = do
   getPackages verbosity (configPackageDB' flgs)
        (globalRepos (savedGlobalFlags config)) comp conf
 
+err :: String -> IO a
+err msg = do 
+          hPutStrLn stderr msg
+          exitFailure
+
+curlURI :: URI -> IO String
+curlURI uri = do
+    eresp <- simpleHTTP (request uri)
+    resp <- handleE (err . show) eresp
+    case rspCode resp of
+                      (2,0,0) -> return (rspBody resp)
+                      _ -> err (httpError resp)
+    where
+    showRspCode (a,b,c) = map intToDigit [a,b,c]
+    httpError resp = showRspCode (rspCode resp) ++ " " ++ rspReason resp
+
+request :: URI -> Request
+request uri = Request{ rqURI = uri,
+                       rqMethod = GET,
+                       rqHeaders = [],
+                       rqBody = "" }
+
+handleE :: Monad m => (ConnError -> m a) -> Either ConnError a -> m a
+handleE h (Left e) = h e
+handleE _ (Right v) = return v
+
+checksumURI :: URI -> IO [String]
+checksumURI uri = do
+  tarballData <- curlURI uri
+  let bytes = pack tarballData
+  return [ "md5     " ++ md5sum bytes
+         , "sha1    " ++ sha1sum bytes
+         , "rmd160  " ++ ripemd160sum bytes
+         ]
+
+simpleVersion :: PackageDisplayInfo -> String
+simpleVersion = showVersion . packageVersion . fromJust . latestAvailable
+
+checksumPackage :: PackageDisplayInfo -> IO String
+checksumPackage info = do
+  let (PackageName s) = pkgname info
+      ver = simpleVersion info
+      uri = parseURI $ "http://hackage.haskell.org/packages/archive/" ++ s ++ "/" ++ 
+                       ver ++ "/" ++ s ++ "-" ++ ver ++ ".tar.gz"
+  sums <- checksumURI (fromJust uri)
+  return $ intercalate " \\\n\t\t" sums
+
 portfileEntries :: (String, String) -> String
 portfileEntries ([], _) = ""
 portfileEntries ("PortSystem", _) = "PortSystem 1.0"
@@ -226,29 +282,32 @@ buildDependencies :: PackageDisplayInfo -> String
 buildDependencies info = ""
 
 breakLines :: String -> String
-breakLines = foldr (\x acc -> " \\\n\t\t" ++ x ++ acc) "" . lines
+breakLines = intercalate " \\\n\t\t" . lines
 
-buildPortfile :: PackageDisplayInfo -> String
-buildPortfile info 
+buildPortfile :: PackageDisplayInfo -> String -> String
+buildPortfile info sums
     = unlines $ map portfileEntries 
       [("PortSystem", [])
       , ([], [])
       , ("name", "hs-" ++ pkgName)
       , ("set canonicalname", pkgName)
-      , ("version", showVersion . packageVersion . fromJust . latestAvailable $ info)
+      , ("version", simpleVersion info)
       , ("categories", "haskell devel")
-      , ("maintainers", [])
+      , ("maintainers", "johnw@newartisans.com")
       , ("platforms", "darwin")
       , ([], [])
       , ("description", synopsis info)
-      , ("long_description", breakLines . description $ info)
+      , ("long_description", "\\\n\t\t" ++ (breakLines . description $ info))
       , ([], [])
       , ("set hackage", "http://hackage.haskell.org/packages/archive")
-      , ("homepage", homepage info)
+      , ("homepage", let url = homepage info 
+                     in case url of
+                          [] -> "${master_sites}"
+                          _  -> url)
       , ("master_sites", "${hackage}/${canonicalname}/${version}")
       , ("distname", "${canonicalname}-${version}")
       , ([], [])
-      , ("checksums", [])
+      , ("checksums", sums)
       , ([], [])
       , ("depends_build", "port:ghc" ++ (buildDependencies info))
       , ([], [])
@@ -270,7 +329,8 @@ writePortfile info = do
       putStrLn $ "Writing Portfile to " ++ dirname
       createDirectoryIfMissing True dirname
       let portfile = FP.combine dirname "Portfile"
-      writeFile portfile (buildPortfile info)
+      sums <- checksumPackage info
+      writeFile portfile (buildPortfile info sums)
 
 main :: IO ()
 main = do
