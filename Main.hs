@@ -1,7 +1,19 @@
 module Main where
 
---import System.Environment (getArgs)
+import Data.List ( sortBy, groupBy, maximumBy )
+import Data.Maybe ( listToMaybe, fromJust, fromMaybe, isJust )
+import Data.Monoid ( Monoid(mempty) )
+import Data.Version ( showVersion )
 
+import Control.Monad ( MonadPlus(mplus), join )
+import Control.Exception ( assert )
+
+--import System.Environment (getArgs)
+import qualified System.FilePath as FP
+import System.Directory
+
+import Distribution.Version   (Version)
+import Distribution.Verbosity (Verbosity, verbose)
 import Distribution.Package
          ( PackageName(..), packageName, packageVersion
          , Dependency(..), thisPackageVersion )
@@ -10,21 +22,17 @@ import Distribution.License (License)
 import Distribution.InstalledPackageInfo (InstalledPackageInfo)
 import qualified Distribution.InstalledPackageInfo as Installed
 import qualified Distribution.PackageDescription   as Available
---import Distribution.PackageDescription.Parse (readPackageDescription)
 import Distribution.PackageDescription.Configuration
          ( flattenPackageDescription )
+
 import Distribution.Simple.Configure (configCompilerAux)
-
-import Distribution.Client.Config
-
 import Distribution.Simple.Configure (getInstalledPackages)
 import Distribution.Simple.Compiler (Compiler,PackageDB)
 import Distribution.Simple.Program (ProgramConfiguration)
 import Distribution.Simple.Utils (equating, comparing)
 import qualified Distribution.Simple.PackageIndex as PackageIndex
-import Distribution.Version   (Version)
-import Distribution.Verbosity (Verbosity, verbose)
 
+import Distribution.Client.Config
 import Distribution.Client.Types
          ( AvailablePackage(..), Repo, AvailablePackageDb(..) )
 import Distribution.Client.Setup
@@ -33,19 +41,6 @@ import Distribution.Client.Utils
          ( mergeBy, MergeResult(..) )
 import Distribution.Client.IndexUtils as IndexUtils
          ( getAvailablePackages )
-
-import Data.List
-         ( sortBy, groupBy, maximumBy )
-import Data.Maybe
-         ( listToMaybe, fromJust, fromMaybe, isJust )
-import Data.Monoid
-         ( Monoid(mempty) )
-import Control.Monad
-         ( MonadPlus(mplus), join )
-import Control.Exception
-         ( assert )
-import qualified System.FilePath as FP
-import System.Directory
 
 -- | The info that we can display for each package. It is information per
 -- package name and covers all installed and avilable versions.
@@ -63,7 +58,6 @@ data PackageDisplayInfo = PackageDisplayInfo {
     description       :: String,
     category          :: String,
     license           :: License,
---    copyright         :: String, --TODO: is this useful?
     author            :: String,
     maintainer        :: String,
     dependencies      :: [Dependency],
@@ -228,6 +222,12 @@ portfileEntries ("configure_et_al", _)
 portfileEntries (x, []) = x ++ "\tNYI"
 portfileEntries (x, y) = x ++ "\t" ++ y
 
+buildDependencies :: PackageDisplayInfo -> String
+buildDependencies info = ""
+
+breakLines :: String -> String
+breakLines = foldr (\x acc -> " \\\n\t\t" ++ x ++ acc) "" . lines
+
 buildPortfile :: PackageDisplayInfo -> String
 buildPortfile info 
     = unlines $ map portfileEntries 
@@ -235,22 +235,22 @@ buildPortfile info
       , ([], [])
       , ("name", "hs-" ++ pkgName)
       , ("set canonicalname", pkgName)
-      , ("version", [])
-      , ("categories", [])
+      , ("version", showVersion . packageVersion . fromJust . latestAvailable $ info)
+      , ("categories", "haskell devel")
       , ("maintainers", [])
-      , ("platforms", [])
+      , ("platforms", "darwin")
       , ([], [])
-      , ("description", [])
-      , ("long_description", [])
+      , ("description", synopsis info)
+      , ("long_description", breakLines . description $ info)
       , ([], [])
-      , ("set hackage", [])
-      , ("homepage", [])
-      , ("master_sites", [])
-      , ("distname", [])
+      , ("set hackage", "http://hackage.haskell.org/packages/archive")
+      , ("homepage", homepage info)
+      , ("master_sites", "${hackage}/${canonicalname}/${version}")
+      , ("distname", "${canonicalname}-${version}")
       , ([], [])
       , ("checksums", [])
       , ([], [])
-      , ("depends_build", [])
+      , ("depends_build", "port:ghc" ++ (buildDependencies info))
       , ([], [])
       , ("configure_et_al", [])
       ]
@@ -260,9 +260,17 @@ writePortfile :: PackageDisplayInfo -> IO ()
 writePortfile info = do
   let dirname = FP.combine "haskell" pkgName
       pkgName = let (PackageName s) = pkgname info in s
-  createDirectoryIfMissing True dirname
-  let portfile = FP.combine dirname "Portfile"
-  writeFile portfile (buildPortfile info)
+      pkgVersion = latestAvailable info
+  case (pkgName, pkgVersion) of
+    ([], _) -> do
+      putStrLn "..."
+    (_, Nothing) -> do
+      putStrLn "..."
+    _ -> do 
+      putStrLn $ "Writing Portfile to " ++ dirname
+      createDirectoryIfMissing True dirname
+      let portfile = FP.combine dirname "Portfile"
+      writeFile portfile (buildPortfile info)
 
 main :: IO ()
 main = do
