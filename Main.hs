@@ -2,9 +2,6 @@ module Main where
 
 --import System.Environment (getArgs)
 
-import Data.Monoid
-         ( Monoid(mempty) )
-
 import Distribution.Package
          ( PackageName(..), packageName, packageVersion
          , Dependency(..), thisPackageVersion )
@@ -41,10 +38,14 @@ import Data.List
          ( sortBy, groupBy, maximumBy )
 import Data.Maybe
          ( listToMaybe, fromJust, fromMaybe, isJust )
+import Data.Monoid
+         ( Monoid(mempty) )
 import Control.Monad
          ( MonadPlus(mplus), join )
 import Control.Exception
          ( assert )
+import qualified System.FilePath as FP
+import System.Directory
 
 -- | The info that we can display for each package. It is information per
 -- package name and covers all installed and avilable versions.
@@ -192,8 +193,81 @@ allPackages verbosity = do
   getPackages verbosity (configPackageDB' flgs)
        (globalRepos (savedGlobalFlags config)) comp conf
 
+portfileEntries :: (String, String) -> String
+portfileEntries ([], _) = ""
+portfileEntries ("PortSystem", _) = "PortSystem 1.0"
+portfileEntries ("configure_et_al", _) 
+    = unlines [
+       "configure       { system \"cd ${worksrcpath} && " ++ 
+       "runhaskell Setup configure --ghc --prefix=${prefix} " ++ 
+       "--with-compiler=${prefix}/bin/ghc --enable-library-profiling\""
+      , "                }"
+      , ""
+      , "build           { system \"cd ${worksrcpath} && " ++ 
+        "runhaskell Setup build -v\""
+      , "                }"
+      , ""
+      , "destroot        { system \"cd ${worksrcpath} && " ++ 
+        "runhaskell Setup copy --copy-prefix=${destroot}${prefix}\""
+      , "                  system \"cd ${worksrcpath} && " ++ 
+        "runhaskell Setup register   --gen-script\""
+      , "                  system \"cd ${worksrcpath} && " ++ 
+        "runhaskell Setup unregister --gen-script\""
+      , ""
+      , "                  file mkdir ${destroot}${prefix}/libexec/${name}"
+      , "                  file copy ${worksrcpath}/register.sh \\"
+      , "                            ${destroot}${prefix}/libexec/${name}"
+      , "                  file copy ${worksrcpath}/unregister.sh \\"
+      , "                            ${destroot}${prefix}/libexec/${name}"
+      , "                }"
+      , ""
+      , "post-activate   { system \"${prefix}/libexec/${name}/register.sh\" }"
+      , ""
+      , "#pre-deactivate { system \"${prefix}/libexec/${name}/unregister.sh\" }"
+      ]
+portfileEntries (x, []) = x ++ "\tNYI"
+portfileEntries (x, y) = x ++ "\t" ++ y
+
+buildPortfile :: PackageDisplayInfo -> String
+buildPortfile info 
+    = unlines $ map portfileEntries 
+      [("PortSystem", [])
+      , ([], [])
+      , ("name", "hs-" ++ pkgName)
+      , ("set canonicalname", pkgName)
+      , ("version", [])
+      , ("categories", [])
+      , ("maintainers", [])
+      , ("platforms", [])
+      , ([], [])
+      , ("description", [])
+      , ("long_description", [])
+      , ([], [])
+      , ("set hackage", [])
+      , ("homepage", [])
+      , ("master_sites", [])
+      , ("distname", [])
+      , ([], [])
+      , ("checksums", [])
+      , ([], [])
+      , ("depends_build", [])
+      , ([], [])
+      , ("configure_et_al", [])
+      ]
+    where pkgName = let (PackageName s) = pkgname info in s
+
+writePortfile :: PackageDisplayInfo -> IO ()
+writePortfile info = do
+  let dirname = FP.combine "haskell" pkgName
+      pkgName = let (PackageName s) = pkgname info in s
+  createDirectoryIfMissing True dirname
+  let portfile = FP.combine dirname "Portfile"
+  writeFile portfile (buildPortfile info)
+
 main :: IO ()
 main = do
   -- args <- getArgs
+  createDirectoryIfMissing True "haskell"
   pkgs <- allPackages verbose
-  print $ map maintainer pkgs
+  mapM writePortfile pkgs
+  putStrLn "Hackage has been exported to MacPorts format in haskell/"
