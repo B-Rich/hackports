@@ -1,0 +1,94 @@
+Name:               hackports
+Version:            0.1.0
+Synopsis:           Maps Hackage packages over to MacPorts Portfiles.
+Description:
+    desc.
+homepage:           http://www.newartisans.com/
+bug-reports:        http://hackage.haskell.org/trac/hackage/
+License:            BSD3
+License-File:       LICENSE
+Author:             John Wiegley <johnw@newartisans.com>
+Maintainer:         John Wiegley <johnw@newartisans.com>
+Copyright:          2009 John Wiegley <johnw@newartisans.com>
+Stability:          Experimental
+Category:           Distribution
+Build-type:         Simple
+Extra-Source-Files: README.textile
+Cabal-Version:      >= 1.4
+
+flag old-base
+  description: Old, monolithic base
+  default: False
+
+flag bytestring-in-base
+
+Executable hackports
+    Main-Is:            Main.hs
+    -- We want assertion checking on even if people build with -O
+    -- although it is expensive, we want to catch problems early:
+    ghc-options:        -prof -auto-all -Wall -fno-ignore-asserts
+    if impl(ghc >= 6.8)
+      ghc-options: -fwarn-tabs
+    Other-Modules:
+        Distribution.Client.BuildReports.Anonymous
+        Distribution.Client.BuildReports.Storage
+        Distribution.Client.BuildReports.Types
+        Distribution.Client.BuildReports.Upload
+        Distribution.Client.Check
+        Distribution.Client.Config
+        Distribution.Client.Configure
+        Distribution.Client.Dependency
+        Distribution.Client.Dependency.Bogus
+        Distribution.Client.Dependency.TopDown
+        Distribution.Client.Dependency.TopDown.Constraints
+        Distribution.Client.Dependency.TopDown.Types
+        Distribution.Client.Dependency.Types
+        Distribution.Client.Fetch
+        Distribution.Client.HttpUtils
+        Distribution.Client.IndexUtils
+        Distribution.Client.Install
+        Distribution.Client.InstallPlan
+        Distribution.Client.InstallSymlink
+        Distribution.Client.List
+        Distribution.Client.Setup
+        Distribution.Client.SetupWrapper
+        Distribution.Client.SrcDist
+        Distribution.Client.Tar
+        Distribution.Client.Types
+        Distribution.Client.Unpack
+        Distribution.Client.Update
+        Distribution.Client.Upload
+        Distribution.Client.Utils
+        Distribution.Client.Win32SelfUpgrade
+        Distribution.Compat.TempFile
+
+    build-depends: base >= 2 && < 4,
+                   Cabal >= 1.6 && < 1.7,
+                   filepath >= 1.0,
+                   network >= 1 && < 3,
+                   HTTP >= 4000.0.2 && < 4001,
+                   zlib >= 0.4 && < 0.6
+
+    if flag(old-base)
+      build-depends: base < 3
+    else
+      build-depends: base       >= 3,
+                     process    >= 1   && < 1.1,
+                     directory  >= 1   && < 1.1,
+                     pretty     >= 1   && < 1.1,
+                     random     >= 1   && < 1.1,
+                     containers >= 0.1 && < 0.3,
+                     array      >= 0.1 && < 0.3,
+                     old-time   >= 1   && < 1.1
+
+    if flag(bytestring-in-base)
+      build-depends: base >= 2.0 && < 2.2
+    else
+      build-depends: base < 2.0 || >= 3.0, bytestring >= 0.9
+
+    if os(windows)
+      build-depends: Win32 >= 2 && < 3
+      cpp-options: -DWIN32
+    else
+      build-depends: unix >= 2.0 && < 2.4
+    extensions: CPP
