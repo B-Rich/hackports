@@ -297,19 +297,19 @@ buildPortfile info sums
       , ("platforms", "darwin")
       , ([], [])
       , ("description", synopsis info)
-      , ("long_description", "\\\n\t\t" ++ (breakLines . description $ info))
+      , ("long_description", "\\\n\t\t" ++ breakLines (description info))
       , ([], [])
       , ("set hackage", "http://hackage.haskell.org/packages/archive")
+      , ("master_sites", "${hackage}/${canonicalname}/${version}")
       , ("homepage", let url = homepage info 
                      in case url of
                           [] -> "${master_sites}"
                           _  -> url)
-      , ("master_sites", "${hackage}/${canonicalname}/${version}")
       , ("distname", "${canonicalname}-${version}")
       , ([], [])
       , ("checksums", sums)
       , ([], [])
-      , ("depends_build", "port:ghc" ++ (buildDependencies info))
+      , ("depends_build", "port:ghc" ++ buildDependencies info)
       , ([], [])
       , ("configure_et_al", [])
       ]
