@@ -1,4 +1,6 @@
-/dist/
-/haskell/
 *.hi
 *.o
+/*.out
+/PortIndex
+/dist/
+/haskell/
