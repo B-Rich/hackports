@@ -3,7 +3,7 @@ module Main where
 import Digest
 
 import Data.Char (intToDigit)
-import Data.List ( sortBy, groupBy, maximumBy, intercalate )
+import Data.List ( sortBy, groupBy, maximumBy, intercalate, isPrefixOf )
 import Data.Maybe ( listToMaybe, fromJust, fromMaybe, isJust )
 import Data.Monoid ( Monoid(mempty) )
 import Data.Version ( showVersion )
@@ -281,8 +281,22 @@ portfileEntries (x, y) = x ++ "\t" ++ y
 buildDependencies :: PackageDisplayInfo -> String
 buildDependencies info = ""
 
+splitString :: String -> String -> [String]
+splitString = split' []
+    where split' acc s str@(x:xs)
+              | s `isPrefixOf` str = acc : split' [] s (drop (length s) str)
+              | otherwise          = split' (acc ++ [x]) s xs
+          split' acc _ [] = [acc]
+
+escapeChars :: String -> String
+escapeChars [] = []
+escapeChars (x:xs)
+    | x `elem` specialChars = '\\' : x : escapeChars xs
+    | otherwise             = x : escapeChars xs
+    where specialChars = "\"\\$[]{};="
+
 breakLines :: String -> String
-breakLines = intercalate " \\\n\t\t" . lines
+breakLines = intercalate " \\\n\t\t" . lines . escapeChars
 
 buildPortfile :: PackageDisplayInfo -> String -> String
 buildPortfile info sums
@@ -296,7 +310,7 @@ buildPortfile info sums
       , ("maintainers", "johnw@newartisans.com")
       , ("platforms", "darwin")
       , ([], [])
-      , ("description", synopsis info)
+      , ("description", breakLines (synopsis info))
       , ("long_description", "\\\n\t\t" ++ breakLines (description info))
       , ([], [])
       , ("set hackage", "http://hackage.haskell.org/packages/archive")
@@ -304,7 +318,7 @@ buildPortfile info sums
       , ("homepage", let url = homepage info 
                      in case url of
                           [] -> "${master_sites}"
-                          _  -> url)
+                          _  -> escapeChars url)
       , ("distname", "${canonicalname}-${version}")
       , ([], [])
       , ("checksums", sums)
