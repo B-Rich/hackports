@@ -21,12 +21,7 @@ module Digest where
 --
 -- A few imports, should tidy these up one day.
 --
-#if __GLASGOW_HASKELL__ >= 608
-import qualified Data.ByteString.Unsafe as B (unsafeUseAsCStringLen)
-#else
-import qualified Data.ByteString.Base   as B (unsafeUseAsCStringLen)
-#endif
-import qualified Data.ByteString      as B
+import qualified Data.ByteString.Char8 as B
 import Foreign
 import Foreign.C.Types
 import Numeric                        (showHex)
@@ -53,7 +48,7 @@ ripemd160_digest_length = 20
 -- While this md5sum binding will return:
 --
 md5sum :: B.ByteString -> String
-md5sum p = unsafePerformIO $ B.unsafeUseAsCStringLen p $ \(ptr,n) -> do
+md5sum p = unsafePerformIO $ B.useAsCStringLen p $ \(ptr,n) -> do
     allocaBytes md5_digest_length $ \digest_ptr -> do
         digest  <- c_md5 ptr (fromIntegral n) digest_ptr
         go digest 0 []
@@ -74,7 +69,7 @@ md5sum p = unsafePerformIO $ B.unsafeUseAsCStringLen p $ \(ptr,n) -> do
 #endif
 
 sha1sum :: B.ByteString -> String
-sha1sum p = unsafePerformIO $ B.unsafeUseAsCStringLen p $ \(ptr,n) -> do
+sha1sum p = unsafePerformIO $ B.useAsCStringLen p $ \(ptr,n) -> do
     allocaBytes sha1_digest_length $ \digest_ptr -> do
         digest  <- c_sha1 ptr (fromIntegral n) digest_ptr
         go digest 0 []
@@ -95,7 +90,7 @@ sha1sum p = unsafePerformIO $ B.unsafeUseAsCStringLen p $ \(ptr,n) -> do
 #endif
 
 ripemd160sum :: B.ByteString -> String
-ripemd160sum p = unsafePerformIO $ B.unsafeUseAsCStringLen p $ \(ptr,n) -> do
+ripemd160sum p = unsafePerformIO $ B.useAsCStringLen p $ \(ptr,n) -> do
     allocaBytes ripemd160_digest_length $ \digest_ptr -> do
         digest  <- c_ripemd160 ptr (fromIntegral n) digest_ptr
         go digest 0 []

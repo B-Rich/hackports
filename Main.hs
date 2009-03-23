@@ -2,6 +2,7 @@ module Main where
 
 import Digest
 
+import qualified Data.Set as DS
 import Data.Char (intToDigit)
 import Data.List ( sortBy, groupBy, maximumBy, intercalate, isPrefixOf )
 import Data.Maybe ( listToMaybe, fromJust, fromMaybe, isJust )
@@ -228,8 +229,7 @@ checksumURI uri = do
   let bytes = pack tarballData
   return [ "md5     " ++ md5sum bytes
          , "sha1    " ++ sha1sum bytes
-         , "rmd160  " ++ ripemd160sum bytes
-         ]
+         , "rmd160  " ++ ripemd160sum bytes ]
 
 simpleVersion :: PackageDisplayInfo -> String
 simpleVersion = showVersion . packageVersion . fromJust . latestAvailable
@@ -275,11 +275,20 @@ portfileEntries ("configure_et_al", _)
       , ""
       , "#pre-deactivate { system \"${prefix}/libexec/${name}/unregister.sh\" }"
       ]
-portfileEntries (x, []) = x ++ "\tNYI"
-portfileEntries (x, y) = x ++ "\t" ++ y
+portfileEntries (x, []) = x
+portfileEntries (x, y)  = x ++ "\t" ++ y
 
 buildDependencies :: PackageDisplayInfo -> String
-buildDependencies info = ""
+buildDependencies =   intercalate " \\\n\t\t" 
+                    . DS.toList . DS.fromList
+                    . deps . dependencies
+    where deps (x:xs) =
+              let (Dependency depName ver) = x
+                  (PackageName name)       = depName
+              in xlatdep name : deps xs
+                  where xlatdep "base" = "port:ghc"
+                        xlatdep n      = "port:hs-" ++ n
+          deps _ = []
 
 splitString :: String -> String -> [String]
 splitString = split' []
@@ -323,7 +332,7 @@ buildPortfile info sums
       , ([], [])
       , ("checksums", sums)
       , ([], [])
-      , ("depends_build", "port:ghc" ++ buildDependencies info)
+      , ("depends_build", buildDependencies info)
       , ([], [])
       , ("configure_et_al", [])
       ]
