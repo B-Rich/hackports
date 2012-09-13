@@ -1,2 +1,15 @@
-This program has only just begun.  I hope to start making progress this week,
-as I read through "Real World Haskell".
+hsCompare is a utility and library for comparing hierarchical data structures.
+It contains both abstract elements, for doing general tree comparisons, and
+also specific "sources" for reading data to compare.  Examples of sources
+include directories, file attributes, file archives, XML file contents, Git
+repository trees, SQL schemas, SQL table contents, and also any file readable
+by Augeas.  Anything that can be represented as a hierarchy can be adapted as
+an hsCompare source, and then be compared to another source.
+
+Once a source has been read into canonical form, this representation may be
+stored in a disk or database and used later as source itself, allowing for
+stateful comparisons.
+
+Modes of comparison include two-way and three-way with an ancestor.  The
+result is a hierarchical set of Deltas.  The granularity of the deltas depends
+on the source.

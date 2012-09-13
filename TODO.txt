@@ -1,0 +1,18 @@
+* hsReader
+
+Read in a hierarchy into an abstract, nested data structure.
+
+* hsWriter
+
+Stores a hierarchy into an SQLite database, which can be read using hsReader
+at a later point in time.
+
+* hsCompare
+
+Compares two or three hierarchies, generating a new hierarchy that represents
+a Delta between the two.
+
+* hsResolve
+
+Given two hierarchies and a Delta, produces a set of actions to resolve each
+in terms of the other.
